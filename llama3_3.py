@@ -12,9 +12,12 @@ import matplotlib.pyplot as plt
 #             # 优先尝试UTF-8解码获取字节
 #             byte_stream += token.encode('utf-8')
 #         except UnicodeEncodeError:
-#             # 回退到原始字节表示
-#             byte_stream += bytes([tid % 256])
-#     return byte_stream
+#             # 回退到原始字节表
+#             byte_stream += bytes([tid % 256]
+#     return byte_strea
+def show_token(hidden):
+
+    return byte_stream
 def intervene_and_generate(model, tokenizer, inputs, intervention_layer=10, token_idx=5, top_k=5):
     with torch.no_grad():
         outputs = model(**inputs, output_hidden_states=True)

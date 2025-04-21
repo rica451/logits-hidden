@@ -37,7 +37,7 @@ def main():
     model.eval()
 
 
-    text = "爸爸的爸爸叫爷爷，爸爸的妈妈叫奶奶。"
+    text = "请你跟着我数，一，二，三，四，五"
     # text = "Le bateau naviguait en douceur sur l"
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
     input_ids = inputs["input_ids"]

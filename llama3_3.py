@@ -15,9 +15,9 @@ import matplotlib.pyplot as plt
 #             # 回退到原始字节表
 #             byte_stream += bytes([tid % 256]
 #     return byte_strea
-def show_token(hidden):
+# def show_token(hidden):
 
-    return byte_stream
+#     return byte_stream
 def intervene_and_generate(model, tokenizer, inputs, intervention_layer=10, token_idx=5, top_k=5):
     with torch.no_grad():
         outputs = model(**inputs, output_hidden_states=True)
@@ -104,7 +104,7 @@ def tokens_to_chinese(tokenizer, token_ids):
 #     return gcld3.get_language(byte_stream.decode('latin-1', errors='replace'))
 
 def main():
-    model_name = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    model_name = "meta-llama/Llama-3.1-8B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -115,7 +115,7 @@ def main():
     )
     model.eval()
 
-    text = "类似你提供的日志可帮助诊断模型决策路径，适合调试生成质量。"
+    text = "请你跟着我数，一，二，三，四，五"
     # text = "How are you? I am fine. This is a test. Hello world!"
 
     inputs = tokenizer(text, return_tensors="pt").to(model.device)

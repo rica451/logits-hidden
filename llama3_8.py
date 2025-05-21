@@ -20,7 +20,7 @@ def filter_english_in_hidden(model, hidden_states, layer_idx, tokenizer, topk=5)
     banned_token_ids_set = set(banned_token_ids)
     modified_hidden = hidden_states.clone()
     seq_len = hidden_states.shape[1]
-    λ = 0.2  # 基础抑制系数
+    λ = 0  # 基础抑制系数
 
     # Precompute normed hidden states and logits
     if hasattr(model.model, 'norm'):
@@ -71,10 +71,10 @@ def filter_english_in_hidden(model, hidden_states, layer_idx, tokenizer, topk=5)
             mod_top = torch.topk(mod_logits, topk)
             
             if not torch.equal(orig_top.indices, mod_top.indices):
-                print(f"\nLayer {layer_idx} Position {pos}:")
+                # print(f"\nLayer {layer_idx} Position {pos}:")
                 orig_tokens = [tokenizer.decode([t]) for t in orig_top.indices[0].tolist()]
                 mod_tokens = [tokenizer.decode([t]) for t in mod_top.indices[0].tolist()]
-                print(f"Original: {orig_tokens}\nModified: {mod_tokens}")
+                # print(f"Original: {orig_tokens}\nModified: {mod_tokens}")
 
     return modified_hidden
 
@@ -102,6 +102,58 @@ def forward_with_layerwise_intervention(model, inputs, tokenizer, start_layer, e
     hidden = model.model.norm(hidden)
     return model.lm_head(hidden)
 
+def generate_with_intervention(
+    model, tokenizer, prompt, start_layer=1, end_layer=32, max_new_tokens=50, topk=5
+):
+    model.eval()
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(model.device)
+    attention_mask = torch.ones_like(input_ids)
+
+    generated = input_ids.clone()
+    for step in range(max_new_tokens):
+        inputs = {
+            "input_ids": generated,
+            "attention_mask": attention_mask,
+            "position_ids": torch.arange(generated.shape[1], device=generated.device).unsqueeze(0),
+        }
+
+        hidden = model.model.embed_tokens(inputs["input_ids"])
+        rotary_emb = model.model.rotary_emb
+        seq_len = hidden.shape[1]
+        position_ids = torch.arange(seq_len, device=hidden.device).unsqueeze(0)
+        cos, sin = rotary_emb(hidden, position_ids)
+        attention_mask_step = inputs["attention_mask"][:, :seq_len].to(hidden.dtype)
+
+        # forward through transformer layers
+        for layer_idx, layer in enumerate(model.model.layers):
+            hidden = layer(
+                hidden,
+                position_embeddings=(cos, sin),
+                attention_mask=attention_mask_step,
+                position_ids=position_ids,
+                use_cache=False,
+            )[0]
+
+            if start_layer <= layer_idx <= end_layer:
+                hidden = filter_english_in_hidden(model, hidden, layer_idx, tokenizer, topk=topk)
+
+        hidden = model.model.norm(hidden)
+        logits = model.lm_head(hidden)
+        next_token_logits = logits[:, -1, :]  # 取最后一个位置的logits
+        next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(-1)
+
+        generated = torch.cat([generated, next_token], dim=-1)
+        attention_mask = torch.ones_like(generated)
+
+        decoded_token = tokenizer.decode(next_token[0])
+        print(decoded_token, end="", flush=True)
+
+        if next_token.item() == tokenizer.eos_token_id:
+            break
+
+    print("\n\nFinal Decoding:\n", tokenizer.decode(generated[0]))
+
+
 def main():
     model_name = "meta-llama/Llama-3.1-8B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -111,27 +163,10 @@ def main():
         device_map="auto",
         trust_remote_code=True
     )
-    model.eval()
 
-    # text = "请你跟着我数，一，二，三，四，五"
-    # text = "Please count with me: one, two, three, four, five."
-    text = "写一个关于小猪的小说:"
-    # text = "The largest country in the world by area is Russia."
-    # text = "世界で最も面積が大きい国はロシアです"
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    inputs["position_ids"] = torch.arange(inputs["input_ids"].shape[1], device=model.device).unsqueeze(0)
-
-    # Original output
-    with torch.no_grad():
-        outputs = model(**inputs)
-        print("\nOriginal Output:")
-        print(tokenizer.decode(torch.argmax(outputs.logits, dim=-1)[0]))
-
-    # Intervened output
-    with torch.no_grad():
-        logits = forward_with_layerwise_intervention(model, inputs, tokenizer, 1, 32)
-        print("\nModified Output:")
-        print(tokenizer.decode(torch.argmax(logits, dim=-1)[0]))
+    prompt = "写一个关于小猪的小说："
+    print("\nGenerating with intervention:\n")
+    generate_with_intervention(model, tokenizer, prompt, start_layer=1, end_layer=32, max_new_tokens=50)
 
 if __name__ == "__main__":
     main()

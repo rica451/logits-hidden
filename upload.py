@@ -17,4 +17,4 @@ with open("/workspace/logits_len/multilingual_dataset3.jsonl", "r", encoding="ut
             continue  
 
 dataset = Dataset.from_list(data)
-dataset.push_to_hub("rica40325/multestdata")
+dataset.push_to_hub("rica40325/DPOdata1")
